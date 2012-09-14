@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from collections import defaultdict
-import random, math, sys
+import random, math, sys, itertools
 
 class GeneticQueens:
     __metaclass__ = ABCMeta
@@ -28,12 +28,40 @@ class GeneticQueens:
         
         generations = 1
         while self.population[0][0] != 0 and generations < max_generations: 
-            generations += 1
 
             n_to_select = int(math.ceil(self.population_size * self.selection_rate))
             selected = [item[1] for item in self.population[:n_to_select]]
 
-            self.population = sorted([(self.attacking_queen_pairs(individual), individual) for individual in (self.mate(*random.sample(selected, 2)) for x in xrange(self.population_size))])
+            total_conflicts = 0
+            for item in self.population:
+                total_conflicts += item[0]
+
+            print "Generation " + str(generations) + " selection average attacking pairs: " + str(total_conflicts / n_to_select)
+            print str(len(set([tuple(x[1]) for x in self.population])))
+
+    
+            perms = itertools.permutations(selected, 2)
+            
+            new_population = []
+            i = 0
+            while i < self.population_size:
+                try:
+                    perm = perms.next()
+                except StopIteration:
+                    break
+                individual = self.mate(*perm)
+                new_population.append((self.attacking_queen_pairs(individual), individual))
+                i += 1
+
+            i = 0
+            while len(new_population) < self.population_size:
+                new_population.append(self.population[i])
+                i += 1
+
+                
+            self.population = sorted(new_population)
+
+            generations += 1
 
         return (self.population[0][0], generations)
 
@@ -176,7 +204,7 @@ def test_algorithms():
         solution_found = 0
         solution_generations = 0
         for x in xrange(trials):
-            (attacking, generations) = sim.simulate(20)
+            (attacking, generations) = sim.simulate(maxgenerations)
             print (attacking, generations)
             if attacking == 0:
                 solution_found += 1
@@ -196,19 +224,16 @@ def single_board():
     sim = Relative(board_size, 2000, .2, .2)
     
     while True:
-        (attacking, generations) = sim.simulate(20)
+        (attacking, generations) = sim.simulate(50)
         print (attacking, generations)
         if attacking == 0:
             print sim.board_as_string(sim.population[0][1])
             break
 
 if __name__ == "__main__":
-    try:
-        if sys.argv[1] == "testalgs":
-            test_algorithms()
-        elif sys.argv[1] == "single":
-            single_board()
-        else:
-            raise Exception()
-    except:
+    if sys.argv[1] == "testalgs":
+        test_algorithms()
+    elif sys.argv[1] == "single":
+        single_board()
+    else:
         usage_and_exit()
