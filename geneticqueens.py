@@ -299,6 +299,23 @@ def test_problem_representations():
         sim = Tournament(rep, population, selectionrate, mutationrate)
         test_sim(sim, problem_representation.__name__, maxgenerations, trials)
 
+def test_problem_representations_large():
+    try:
+        board_size = int(sys.argv[2])
+        population = int(sys.argv[3])
+        selectionrate = float(sys.argv[4])
+        mutationrate = float(sys.argv[5])
+        maxgenerations = int(sys.argv[6])
+        trials = int(sys.argv[7])
+    except:
+        usage_and_exit()
+
+    for problem_representation in [Relative, 
+            PermutationFixing]:
+                    
+        rep = problem_representation(board_size)
+        sim = Tournament(rep, population, selectionrate, mutationrate)
+        test_sim(sim, problem_representation.__name__, maxgenerations, trials)
 
 def single_board():
     try:
@@ -306,7 +323,7 @@ def single_board():
     except:
         usage_and_exit()
 
-    rep = Relative(board_size)
+    rep = PermutationFixing(board_size)
     sim = Tournament(rep, 2000, .2, .4)
     
     while True:
@@ -324,6 +341,8 @@ if __name__ == "__main__":
 
     if operation == 'testreps':
         test_problem_representations()
+    elif operation == 'testrepslg':
+        test_problem_representations_large()
     elif operation == 'testalgs':
         test_algorithms()
     elif operation == 'single':
