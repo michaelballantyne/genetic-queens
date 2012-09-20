@@ -239,6 +239,7 @@ class PermutationGroup(PermutationFixing):
 def usage_and_exit():
     print 'Usage:'
     print 'python geneticqueens.py testreps boardsize population selectionrate mutationrate maxgenerations trials'
+    print 'python geneticqueens.py testrepslg boardsize population selectionrate mutationrate maxgenerations trials'
     print 'python geneticqueens.py testalgs boardsize population selectionrate mutationrate maxgenerations trials'
     print 'python geneticqueens.py single boardsize'
 
@@ -310,8 +311,7 @@ def test_problem_representations_large():
     except:
         usage_and_exit()
 
-    for problem_representation in [Relative, 
-            PermutationFixing]:
+    for problem_representation in [PermutationFixing, Relative]:
                     
         rep = problem_representation(board_size)
         sim = Tournament(rep, population, selectionrate, mutationrate)
