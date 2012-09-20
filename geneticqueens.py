@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from collections import defaultdict, namedtuple
-import random, math, sys, itertools
+import random, math, itertools, argparse
 
 class GeneticAlgorithm:
     __metaclass__ = ABCMeta
@@ -8,12 +8,13 @@ class GeneticAlgorithm:
     IndividualWithScore = namedtuple('IndividualWithScore', ['score', 'individual'])
 
     def __init__(self, problem_representation, population_size, 
-            selection_rate, mutation_probability):
+            selection_rate, mutation_probability, verbose=False):
 
         self.problem_representation = problem_representation
         self.population_size = population_size
         self.selection_rate = selection_rate
         self.mutation_probability = mutation_probability
+        self.verbose = verbose
 
     def annotate_population(self, population):
         return sorted(
@@ -46,10 +47,11 @@ class GeneticAlgorithm:
             for item in self.population:
                 total_conflicts += item[0]
 
-            #print "Generation " + str(generation)
-            #print "Average attacking pairs: " + str(total_conflicts)
-            #print "Unique invidiuals: " + str(len(set(self.population)))
-            #print
+            if self.verbose:
+                print "Generation " + str(generation)
+                print "Average attacking pairs: " + str(total_conflicts)
+                print "Unique invidiuals: " + str(len(set(self.population)))
+                print
 
             self.population = self.annotate_population(self.mutate_some(self.reproduce(self.population)))
 
@@ -57,7 +59,7 @@ class GeneticAlgorithm:
 
         return (self.population[0][0], generation)
 
-class RandomPermutations(GeneticAlgorithm):
+class Truncation(GeneticAlgorithm):
     def select_best_parents(self, population):
         n_to_select = int(math.ceil(self.population_size * self.selection_rate))
 
@@ -82,7 +84,7 @@ class Tournament(GeneticAlgorithm):
         return new_population
 
 
-class PermutationsPlusOldGeneration(RandomPermutations):
+class TruncationPlusPromotion(Truncation):
     def reproduce(self, population):
         selected = self.select_best_parents(population)
 
@@ -119,7 +121,7 @@ class ProblemRepresentation:
         pass
 
 
-class NQueens(ProblemRepresentation):
+class Columns(ProblemRepresentation):
     def generate_random_individual(self):
         return [random.randint(0, self.board_size - 1) for x in xrange(self.board_size)]
 
@@ -165,7 +167,7 @@ class NQueens(ProblemRepresentation):
         return tuple(result)
 
 
-class Relative(NQueens):
+class Relative(Columns):
     def generate_random_individual(self):
         return [random.randint(0, (self.board_size - 1) - x) for x in xrange(self.board_size)]
 
@@ -193,7 +195,7 @@ class Relative(NQueens):
         return tuple(result)
 
 
-class RooksOnly(NQueens):
+class RooksOnly(Columns):
     def generate_random_individual(self):
         return random.sample(range(self.board_size), self.board_size)
 
@@ -235,117 +237,58 @@ class PermutationGroup(PermutationFixing):
         return tuple(child)
 
 
+def run(args):
+    print "Using population %d, mutation rate %f, and selection rate %f\n" % (args.population, args.mutation_rate, args.selection_rate)
 
-def usage_and_exit():
-    print 'Usage:'
-    print 'python geneticqueens.py testreps boardsize population selectionrate mutationrate maxgenerations trials'
-    print 'python geneticqueens.py testrepslg boardsize population selectionrate mutationrate maxgenerations trials'
-    print 'python geneticqueens.py testalgs boardsize population selectionrate mutationrate maxgenerations trials'
-    print 'python geneticqueens.py single boardsize'
+    for alg in args.algorithms:
+        print "Algorithm %s:\n" % alg.__name__
+        for rep in args.representations:
+            print "Representation %s:" % rep.__name__
 
-    exit(1)
+            rep = Relative(args.board_size)
+            sim = alg(rep, args.population, args.selection_rate, args.mutation_rate, verbose=args.print_generation_details)
 
-def test_sim(sim, sim_name, maxgenerations, trials):
-    print sim_name
+            solutions_found = 0
+            total_solution_generations = 0
 
-    solutions_found = 0
-    total_solution_generations = 0
+            for trial in xrange(args.trials):
+                (attacking_pairs, generations) = sim.simulate(args.generations)
+                print (attacking_pairs, generations)
+                if attacking_pairs == 0:
+                    solutions_found += 1
+                    total_solution_generations += generations
+                    if args.print_solution is True:
+                        print rep.board_as_string(sim.population[0][1])
 
-    for trial in xrange(trials):
-        (attacking_pairs, generations) = sim.simulate(maxgenerations)
-        print (attacking_pairs, generations)
-        if attacking_pairs == 0:
-            solutions_found += 1
-            total_solution_generations += generations
+            print '%d percent of trials produced a solution.' % int(solutions_found * 100.0 / args.trials)
 
-    print '%d percent of trials produced a solution.' % int(solutions_found * 100.0 / trials)
-
-    if solutions_found > 0:
-        print 'Average %d generations to produce a solution.' % (total_solution_generations / solutions_found)
-    print
-    print
-
-
-def test_algorithms():
-    try:
-        board_size = int(sys.argv[2])
-        population = int(sys.argv[3])
-        selectionrate = float(sys.argv[4])
-        mutationrate = float(sys.argv[5])
-        maxgenerations = int(sys.argv[6])
-        trials = int(sys.argv[7])
-    except:
-        usage_and_exit()
-
-    for algorithm in [Tournament, RandomPermutations, PermutationsPlusOldGeneration]:
-        rep = Relative(board_size)
-        sim = algorithm(rep, population, selectionrate, mutationrate)
-        test_sim(sim, algorithm.__name__, maxgenerations, trials)
-
-def test_problem_representations():
-    try:
-        board_size = int(sys.argv[2])
-        population = int(sys.argv[3])
-        selectionrate = float(sys.argv[4])
-        mutationrate = float(sys.argv[5])
-        maxgenerations = int(sys.argv[6])
-        trials = int(sys.argv[7])
-    except:
-        usage_and_exit()
-
-    for problem_representation in [NQueens, RooksOnly, Relative, 
-            PermutationFixing, PermutationGroup]:
-                    
-        rep = problem_representation(board_size)
-        sim = Tournament(rep, population, selectionrate, mutationrate)
-        test_sim(sim, problem_representation.__name__, maxgenerations, trials)
-
-def test_problem_representations_large():
-    try:
-        board_size = int(sys.argv[2])
-        population = int(sys.argv[3])
-        selectionrate = float(sys.argv[4])
-        mutationrate = float(sys.argv[5])
-        maxgenerations = int(sys.argv[6])
-        trials = int(sys.argv[7])
-    except:
-        usage_and_exit()
-
-    for problem_representation in [PermutationFixing, Relative]:
-                    
-        rep = problem_representation(board_size)
-        sim = Tournament(rep, population, selectionrate, mutationrate)
-        test_sim(sim, problem_representation.__name__, maxgenerations, trials)
-
-def single_board():
-    try:
-        board_size = int(sys.argv[2])
-    except:
-        usage_and_exit()
-
-    rep = PermutationFixing(board_size)
-    sim = Tournament(rep, 2000, .2, .4)
-    
-    while True:
-        (attacking, generations) = sim.simulate(50)
-        print (attacking, generations)
-        if attacking == 0:
-            print sim.problem_representation.board_as_string(sim.population[0][1])
-            break
+            if solutions_found > 0:
+                print 'Average %d generations to produce a solution.' % (total_solution_generations / solutions_found)
+            print
+            print
 
 if __name__ == "__main__":
-    try: 
-        operation = sys.argv[1]
-    except:
-        usage_and_exit()
+    algorithms = [Truncation, Tournament]
+    representations = [Columns, Relative, RooksOnly, PermutationFixing, PermutationGroup]
 
-    if operation == 'testreps':
-        test_problem_representations()
-    elif operation == 'testrepslg':
-        test_problem_representations_large()
-    elif operation == 'testalgs':
-        test_algorithms()
-    elif operation == 'single':
-        single_board()
-    else:
-        usage_and_exit()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('board_size', type=int, help="size of chessboard to find a solution for")
+
+    parser.add_argument('-a', nargs='*', dest='algorithms', type=lambda name: dict([(alg.__name__, alg) for alg in algorithms])[name], choices=algorithms, default=[Tournament], help="list of algorithms to test")
+
+    parser.add_argument('-r', nargs='*', dest='representations', type=lambda name: dict([(rep.__name__, rep) for rep in representations])[name], choices=representations, default=[PermutationFixing], help="list of problem representations to test")
+
+    parser.add_argument('trials', nargs='?', type=int, default=1, help="trials. 0 means go until a solution is found.")
+    parser.add_argument('generations', nargs='?', type=int, default=20, help="generations limit")
+    parser.add_argument('population', nargs='?', type=int, default=2000, help="initial population size")
+    parser.add_argument('mutation_rate', nargs='?', type=float, default=.2, help="mutation rate")
+    parser.add_argument('selection_rate', nargs='?', type=float, default=.2, help="selection rate")
+
+    parser.add_argument('--print', dest='print_solution', action='store_true')
+    parser.add_argument('--generation-details', dest='print_generation_details', action='store_true')
+    try:
+        run(parser.parse_args())
+    except KeyboardInterrupt:
+        print
+        exit(0)
